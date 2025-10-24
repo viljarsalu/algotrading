@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - dYdX Trading Service</title>
+    <link href="/static/css/output.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-gray-800 to-dydx-blue min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-white">dYdX Trading Dashboard</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="user-address" class="text-sm text-gray-300 font-mono">Wallet: 0x1234...5678</span>
+                    <button id="logout-btn"
+                            class="inline-flex items-center px-3 py-2 border border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Dashboard Header -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-white">Credential Management</h2>
+            <p class="mt-2 text-gray-400">
+                Configure your trading credentials and webhook settings
+            </p>
+        </div>
+
+        <!-- Status Overview Cards -->
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+            <!-- dYdX Status -->
+            <div id="dydx-status" class="bg-gray-800/50 backdrop-blur-sm overflow-hidden shadow rounded-lg border border-gray-700">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div id="dydx-indicator" class="w-8 h-8 bg-red-900 rounded-md flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-400 truncate">
+                                    dYdX Credentials
+                                </dt>
+                                <dd id="dydx-status-text" class="text-lg font-medium text-red-400">
+                                    Not Configured
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telegram Status -->
+            <div id="telegram-status" class="bg-gray-800/50 backdrop-blur-sm overflow-hidden shadow rounded-lg border border-gray-700">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div id="telegram-indicator" class="w-8 h-8 bg-red-900 rounded-md flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-400 truncate">
+                                    Telegram Notifications
+                                </dt>
+                                <dd id="telegram-status-text" class="text-lg font-medium text-red-400">
+                                    Not Configured
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Webhook Status -->
+            <div id="webhook-status" class="bg-gray-800/50 backdrop-blur-sm overflow-hidden shadow rounded-lg border border-gray-700">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div id="webhook-indicator" class="w-8 h-8 bg-green-900 rounded-md flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-400 truncate">
+                                    Webhook Secret
+                                </dt>
+                                <dd id="webhook-status-text" class="text-lg font-medium text-green-400">
+                                    Configured
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Balance Card -->
+            <div id="balance-card" class="bg-gray-800/50 backdrop-blur-sm overflow-hidden shadow rounded-lg border border-gray-700">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div id="balance-indicator" class="w-8 h-8 bg-gray-700 rounded-md flex items-center justify-center">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-400 truncate">
+                                    Account Balance
+                                </dt>
+                                <dd id="balance-text" class="text-lg font-medium text-gray-400">
+                                    <span id="balance-loading" class="text-sm">Loading...</span>
+                                    <span id="balance-value" class="hidden">$0.00</span>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="bg-gray-800/50 backdrop-blur-sm shadow rounded-lg border border-gray-700">
+            <div class="border-b border-gray-700">
+                <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                    <button id="credentials-tab" class="credentials-tab border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Trading Credentials
+                    </button>
+                    <button id="webhook-tab" class="webhook-tab border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Webhook Configuration
+                    </button>
+                    <button id="profile-tab" class="profile-tab border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Profile Settings
+                    </button>
+                    <button id="equity-tab" class="equity-tab border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        📈 Equity Curve
+                    </button>
+                </nav>
+            </div>
+
+            <div class="p-6">
+                <!-- Credentials Tab Content -->
+                <div id="credentials-content" class="tab-content">
+                    <h3 class="text-lg font-medium text-white mb-6">Configure Your Trading Credentials</h3>
+
+                    <!-- dYdX Credentials Form -->
+                    <div class="mb-8">
+                        <div class="flex items-center mb-4">
+                            <h4 class="text-md font-medium text-white">dYdX Wallet Configuration</h4>
+                            <span id="dydx-badge" class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700">
+                                Required
+                            </span>
+                        </div>
+
+                        <form id="dydx-form" class="space-y-4">
+                            <div>
+                                <label for="dydx-address" class="block text-sm font-medium text-gray-300">dYdX Wallet Address</label>
+                                <input type="text" id="dydx-address" name="dydx-address" readonly
+                                       class="mt-1 block w-full border-gray-600 rounded-md shadow-sm bg-gray-700/50 text-gray-400 border-gray-600 cursor-not-allowed sm:text-sm"
+                                       placeholder="Will be auto-populated from your connected wallet">
+                                <p class="mt-2 text-sm text-gray-400">Your authenticated Ethereum wallet address (same as login)</p>
+                            </div>
+
+                            <div>
+                                <label for="dydx-mnemonic" class="block text-sm font-medium text-gray-300">dYdX Mnemonic Phrase</label>
+                                <textarea id="dydx-mnemonic" name="dydx-mnemonic" rows="3" autocomplete="off"
+                                          class="mt-1 block w-full border-gray-600 rounded-md shadow-sm bg-gray-700 text-white border-gray-600 focus:border-dydx-blue focus:ring-dydx-blue sm:text-sm font-mono"
+                                          placeholder="Enter your 12 or 24 word mnemonic phrase"></textarea>
+                                <p class="mt-2 text-sm text-gray-400">Your dYdX wallet's secret recovery phrase (stored encrypted, never displayed)</p>
+                                <p id="mnemonic-status" class="mt-1 text-sm text-green-400 hidden">✓ Mnemonic configured and encrypted</p>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <button type="submit"
+                                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-dydx-blue hover:bg-dydx-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    Save dYdX Credentials
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Telegram Credentials Form -->
+                    <div>
+                        <div class="flex items-center mb-4">
+                            <h4 class="text-md font-medium text-white">Telegram Notifications</h4>
+                            <span id="telegram-badge" class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/50 text-yellow-300 border border-yellow-700">
+                                Optional
+                            </span>
+                        </div>
+
+                        <form id="telegram-form" class="space-y-4">
+                            <div>
+                                <label for="telegram-token" class="block text-sm font-medium text-gray-300">Telegram Bot Token</label>
+                                <input type="password" id="telegram-token" name="telegram-token" autocomplete="off"
+                                       class="mt-1 block w-full border-gray-600 rounded-md shadow-sm bg-gray-700 text-white border-gray-600 focus:border-dydx-blue focus:ring-dydx-blue sm:text-sm font-mono"
+                                       placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                                <p class="mt-2 text-sm text-gray-400">Get this from @BotFather on Telegram (stored encrypted, never displayed)</p>
+                                <p id="telegram-token-status" class="mt-1 text-sm text-green-400 hidden">✓ Token configured and encrypted</p>
+                            </div>
+
+                            <div>
+                                <label for="telegram-chat-id" class="block text-sm font-medium text-gray-300">Telegram Chat ID</label>
+                                <input type="text" id="telegram-chat-id" name="telegram-chat-id" autocomplete="off"
+                                       class="mt-1 block w-full border-gray-600 rounded-md shadow-sm bg-gray-700 text-white border-gray-600 focus:border-dydx-blue focus:ring-dydx-blue sm:text-sm font-mono"
+                                       placeholder="-1001234567890">
+                                <p class="mt-2 text-sm text-gray-400">Your Telegram user ID or group chat ID (stored encrypted, never displayed)</p>
+                                <p id="telegram-chatid-status" class="mt-1 text-sm text-green-400 hidden">✓ Chat ID configured and encrypted</p>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <button type="submit"
+                                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    Save Telegram Settings
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Webhook Tab Content -->
+                <div id="webhook-content" class="tab-content hidden">
+                    <h3 class="text-lg font-medium text-white mb-6">Webhook Configuration</h3>
+
+                    <div class="space-y-6">
+                        <!-- Webhook URL -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Webhook URL</label>
+                            <div class="flex">
+                                <input type="text" id="webhook-url" readonly
+                                       class="flex-1 border-gray-600 rounded-l-md shadow-sm bg-gray-700 text-gray-400 border-gray-600 sm:text-sm">
+                                <button id="copy-webhook-url"
+                                        class="inline-flex items-center px-3 py-2 border border-l-0 border-gray-600 rounded-r-md bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    Copy
+                                </button>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-400">Send POST requests to this URL for trading notifications</p>
+                        </div>
+
+                        <!-- Webhook Secret -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Webhook Secret</label>
+                            <div class="flex">
+                                <input type="password" id="webhook-secret" readonly
+                                       class="flex-1 border-gray-600 rounded-l-md shadow-sm bg-gray-700 text-gray-400 border-gray-600 sm:text-sm">
+                                <button id="toggle-secret"
+                                        class="inline-flex items-center px-3 py-2 border border-l-0 border-gray-600 rounded-r-md bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    Show
+                                </button>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-400">Include 'X-Webhook-Secret' header with this value</p>
+                        </div>
+
+                        <!-- Regenerate Secret -->
+                        <div class="flex justify-between items-center p-4 bg-gray-900/50 rounded-md">
+                            <div>
+                                <h4 class="text-sm font-medium text-white">Regenerate Webhook Secret</h4>
+                                <p class="text-sm text-gray-400">Generate a new secret (requires updating your webhook configuration)</p>
+                            </div>
+                            <button id="regenerate-secret"
+                                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                Regenerate
+                            </button>
+                        </div>
+
+                        <!-- Setup Instructions -->
+                        <div class="bg-gray-900/50 rounded-md p-4 mb-4">
+                            <h4 class="text-sm font-medium text-white mb-2">Setup Instructions</h4>
+                            <div class="text-sm text-gray-300 space-y-2">
+                                <p>1. Use the webhook URL above as your notification endpoint</p>
+                                <p>2. Include the webhook secret in your JSON payload</p>
+                                <p>3. Send POST requests with JSON payload for trading signals</p>
+                                <p>4. The webhook UUID in the URL serves as additional authentication</p>
+                            </div>
+                        </div>
+
+                        <!-- TradingView JSON Sample -->
+                        <div class="bg-gray-900/50 rounded-md p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-medium text-white">TradingView Alert Message</h4>
+                                <button id="copy-json-sample"
+                                        class="inline-flex items-center px-3 py-1.5 border border-gray-600 text-xs font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                    Copy JSON
+                                </button>
+                            </div>
+                            <pre id="json-sample" class="bg-black/50 rounded-md p-4 overflow-x-auto text-xs"><code class="text-green-400 font-mono">{
+  "secret": "your-webhook-secret",
+  "symbol": "{{ticker}}",
+  "side": "buy",
+  "size": 0.01,
+  "price": {{close}}
+}</code></pre>
+                            <div class="mt-3 space-y-2">
+                                <p class="text-xs text-gray-400">💡 <strong>TradingView Variables:</strong></p>
+                                <ul class="text-xs text-gray-400 space-y-1 ml-4">
+                                    <li>• <code class="text-blue-400">{{ticker}}</code> - Symbol (auto-converted: BTCUSDT → BTC-USD)</li>
+                                    <li>• <code class="text-blue-400">{{close}}</code> - Closing price of current bar</li>
+                                    <li>• <code class="text-blue-400">{{open}}</code> - Opening price</li>
+                                    <li>• <code class="text-blue-400">{{high}}</code> - Highest price</li>
+                                    <li>• <code class="text-blue-400">{{low}}</code> - Lowest price</li>
+                                </ul>
+                                <p class="text-xs text-yellow-400 mt-2">⚠️ Replace <code class="text-yellow-300">your-webhook-secret</code> with your actual secret from above</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Tab Content -->
+                <div id="profile-content" class="tab-content hidden">
+                    <h3 class="text-lg font-medium text-white mb-6">Profile Information</h3>
+
+                    <div class="space-y-6">
+                        <!-- Account Information -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Wallet Address</label>
+                                <input type="text" id="profile-address" readonly
+                                       class="block w-full border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-400 border-gray-600 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Account Created</label>
+                                <input type="text" id="profile-created" readonly
+                                       class="block w-full border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-400 border-gray-600 sm:text-sm">
+                            </div>
+                        </div>
+
+                        <!-- Account Balance Details -->
+                        <div class="bg-gray-900/50 rounded-md p-6 mb-6">
+                            <h4 class="text-sm font-medium text-white mb-4 flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                dYdX Account Balance
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div class="bg-gray-800/50 p-4 rounded-md">
+                                    <div class="text-sm text-gray-400 mb-1">Total Equity</div>
+                                    <div id="profile-equity" class="text-2xl font-bold text-white">--</div>
+                                </div>
+                                <div class="bg-gray-800/50 p-4 rounded-md">
+                                    <div class="text-sm text-gray-400 mb-1">Free Collateral</div>
+                                    <div id="profile-free-collateral" class="text-2xl font-bold text-green-400">--</div>
+                                </div>
+                                <div class="bg-gray-800/50 p-4 rounded-md">
+                                    <div class="text-sm text-gray-400 mb-1">Margin Used</div>
+                                    <div id="profile-margin-used" class="text-2xl font-bold text-yellow-400">--</div>
+                                </div>
+                                <div class="bg-gray-800/50 p-4 rounded-md">
+                                    <div class="text-sm text-gray-400 mb-1">Open Positions Value</div>
+                                    <div id="profile-positions-value" class="text-2xl font-bold text-blue-400">--</div>
+                                </div>
+                            </div>
+                            <div id="balance-error" class="hidden mt-4 text-sm text-red-400"></div>
+                            <div class="mt-4 flex justify-end">
+                                <button id="refresh-balance" class="inline-flex items-center px-3 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    Refresh Balance
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Account Statistics -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                            <div class="text-center p-4 bg-gray-900/50 rounded-md">
+                                <div class="text-2xl font-bold text-white" id="account-age">0</div>
+                                <div class="text-sm text-gray-400">Days Active</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-900/50 rounded-md">
+                                <div class="text-2xl font-bold text-white" id="total-positions">0</div>
+                                <div class="text-sm text-gray-400">Total Positions</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-900/50 rounded-md">
+                                <div class="text-2xl font-bold text-white" id="success-rate">0%</div>
+                                <div class="text-sm text-gray-400">Success Rate</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                                <!-- Equity Curve Tab Content -->
+                <div id="equity-content" class="tab-content hidden">
+                    <h3 class="text-lg font-medium text-white mb-6">📈 Portfolio Equity Curve</h3>
+                    
+                    <!-- Equity Metrics -->
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-4 mb-6">
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Starting Capital</div>
+                            <div id="equity-starting" class="text-2xl font-bold text-white">--</div>
+                        </div>
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Current Equity</div>
+                            <div id="equity-current" class="text-2xl font-bold text-white">--</div>
+                        </div>
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Growth Amount</div>
+                            <div id="equity-growth-amount" class="text-2xl font-bold text-green-400">--</div>
+                        </div>
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Growth %</div>
+                            <div id="equity-growth-pct" class="text-2xl font-bold text-green-400">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Time Range Selector -->
+                    <div class="flex gap-2 mb-6">
+                        <button class="equity-days-btn px-4 py-2 rounded-md text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600" data-days="7">7 Days</button>
+                        <button class="equity-days-btn px-4 py-2 rounded-md text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 active" data-days="30">30 Days</button>
+                        <button class="equity-days-btn px-4 py-2 rounded-md text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600" data-days="90">90 Days</button>
+                        <button class="equity-days-btn px-4 py-2 rounded-md text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600" data-days="365">1 Year</button>
+                        <button id="refresh-equity" class="ml-auto px-4 py-2 rounded-md text-sm font-medium bg-dydx-blue text-white hover:bg-dydx-blue-dark">🔄 Refresh</button>
+                    </div>
+
+                    <!-- Equity Chart -->
+                    <div class="bg-gray-900/50 p-4 rounded-md mb-6">
+                        <h4 class="text-sm font-medium text-white mb-4">Equity Curve</h4>
+                        <div style="position: relative; height: 400px;">
+                            <canvas id="equityChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Growth Chart -->
+                    <div class="bg-gray-900/50 p-4 rounded-md mb-6">
+                        <h4 class="text-sm font-medium text-white mb-4">Growth Percentage</h4>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="growthChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Additional Metrics -->
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Peak Equity</div>
+                            <div id="equity-peak" class="text-xl font-bold text-white">--</div>
+                        </div>
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Max Drawdown</div>
+                            <div id="equity-drawdown" class="text-xl font-bold text-red-400">--</div>
+                        </div>
+                        <div class="bg-gray-900/50 p-4 rounded-md">
+                            <div class="text-sm text-gray-400 mb-1">Realized PNL</div>
+                            <div id="equity-realized" class="text-xl font-bold text-green-400">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Warnings -->
+        <div id="security-warnings" class="mt-6 space-y-4">
+            <!-- Warning messages will be inserted here by JavaScript -->
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900/50 backdrop-blur-sm border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-400">
+                    © 2024 dYdX Trading Service. Secure credential management.
+                </div>
+                <div class="flex space-x-6">
+                    <span class="text-sm text-gray-400">Phase 2: Web3 Authentication</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Dashboard JavaScript -->
+    <script src="/static/js/dashboard.js?v=6.1"></script>
+        <!-- Equity Curve JavaScript is now included in dashboard.js -->
+</body>
+</html>

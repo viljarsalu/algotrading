@@ -1,0 +1,52 @@
+services:
+  web-app:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dydx_user:dydx_password@db:5432/dydx_trading
+      - MASTER_ENCRYPTION_KEY=e88c560ed589028a32f711042bd79ec94cd25d0974f8006021f124c50a3e5b09
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    networks:
+      - dydx-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=dydx_trading
+      - POSTGRES_USER=dydx_user
+      - POSTGRES_PASSWORD=dydx_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - dydx-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dydx_user -d dydx_trading"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  dydx-network:
+    driver: bridge

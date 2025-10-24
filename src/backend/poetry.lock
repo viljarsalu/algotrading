@@ -1,0 +1,2 @@
+# This file is intentionally left empty for Docker builds
+# Poetry lock file will be generated inside the Docker container

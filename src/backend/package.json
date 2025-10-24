@@ -1,0 +1,38 @@
+{
+  "name": "dydx-trading-service-frontend",
+  "version": "1.0.0",
+  "description": "Frontend assets for dYdX Trading Service",
+  "main": "static/js/main.js",
+  "scripts": {
+    "build-css": "tailwindcss -i ./src/static/css/input.css -o ./src/static/css/output.css --watch",
+    "build": "npm run build-css",
+    "dev": "npm run build-css",
+    "prod": "NODE_ENV=production tailwindcss -i ./src/static/css/input.css -o ./src/static/css/output.css --minify"
+  },
+  "keywords": [
+    "dydx",
+    "trading",
+    "tailwindcss",
+    "frontend"
+  ],
+  "author": "dYdX Trading Service Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.10",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "chart.js": "^4.4.0",
+    "date-fns": "^3.0.6",
+    "lodash": "^4.17.21"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}
