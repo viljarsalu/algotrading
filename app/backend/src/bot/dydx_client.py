@@ -10,8 +10,10 @@ import logging
 from decimal import Decimal
 from typing import Dict, Any, Optional, Tuple
 from dydx_v4_client.node.client import NodeClient
-from dydx_v4_client.network import mainnet_node, testnet_node
-from eth_account import Account
+from dydx_v4_client.node.market import Market
+from dydx_v4_client.network import make_mainnet, make_testnet
+from dydx_v4_client.wallet import Wallet
+from dydx_v4_client.key_pair import KeyPair
 from src.core.config import get_settings
  
 logger = logging.getLogger(__name__)
@@ -22,8 +24,8 @@ class DydxClient:
 
     # Default network configurations
     NETWORKS = {
-        1: mainnet_node,
-        11155111: testnet_node,  # Sepolia testnet
+        1: "mainnet",
+        11155111: "testnet",  # Sepolia testnet
     }
 
     def __init__(self, node_client: NodeClient):
@@ -37,16 +39,16 @@ class DydxClient:
     @staticmethod
     async def create_client(
         network_id: Optional[int] = None,
-        eth_private_key: Optional[str] = None,
+        mnemonic: Optional[str] = None,
     ) -> "DydxClient":
         """Create authenticated dYdX client instance.
         
-        Uses provided private key for user-specific context or falls back to
+        Uses provided mnemonic for user-specific context or falls back to
         the environment settings for system-level operations.
 
         Args:
             network_id: Optional network ID. Defaults to testnet if not in production.
-            eth_private_key: Optional Ethereum private key for user authentication.
+            mnemonic: Optional dYdX mnemonic phrase (24 words) for user authentication.
         
         Returns:
             Authenticated DydxClient instance
@@ -57,11 +59,24 @@ class DydxClient:
         try:
             settings = get_settings()
             
-            # Use provided key or fallback to environment settings
-            private_key = eth_private_key or settings.dydx_v4.private_key
-
-            if not private_key:
-                raise ValueError("Ethereum private key is not provided and DYDX_V4_PRIVATE_KEY is not set.")
+            # For multi-user support, mnemonic MUST be provided per-user
+            # Do NOT fallback to environment variables for user trading
+            if not mnemonic:
+                raise ValueError(
+                    "Mnemonic is required for trading operations. "
+                    "Please configure your dYdX mnemonic in the dashboard."
+                )
+            
+            user_mnemonic = mnemonic
+            
+            # Normalize mnemonic: strip whitespace, convert to lowercase, replace multiple spaces with single space
+            user_mnemonic = ' '.join(user_mnemonic.strip().lower().split())
+            
+            # Validate mnemonic word count
+            mnemonic_words = user_mnemonic.split()
+            valid_word_counts = [12, 15, 18, 21, 24]
+            if len(mnemonic_words) not in valid_word_counts:
+                raise ValueError(f"Mnemonic must contain 12, 15, 18, 21, or 24 words. Got {len(mnemonic_words)} words: {user_mnemonic[:50]}...")
 
             # Default to testnet if not in production
             if network_id is None:
@@ -71,27 +86,97 @@ class DydxClient:
             if network_id not in DydxClient.NETWORKS:
                 raise ValueError(f"Unsupported network ID: {network_id}")
             
-            network_config = DydxClient.NETWORKS[network_id]
+            network_type = DydxClient.NETWORKS[network_id]
 
-            # Create account from private key
-            account = Account.from_key(private_key)
-
-            # Create dYdX node client
-            from dydx_v4_client.chain.async_client import AsyncChainClient
-            from dydx_v4_client.indexer.async_client import AsyncIndexerClient
-
-            network_config_obj = network_config(channel="api")
-            indexer_client = AsyncIndexerClient(network_config_obj)
-            chain_client = AsyncChainClient(network_config_obj)
+            # Create network configuration based on network type
+            if network_type == "mainnet":
+                # Try primary endpoint first, with fallback options
+                try:
+                    config = make_mainnet(
+                        node_url="https://dydx-ops-rpc.kingnodes.com",
+                        rest_indexer="https://indexer.dydx.trade",
+                        websocket_indexer="wss://indexer.dydx.trade/v4/ws"
+                    ).node
+                except Exception as e:
+                    logger.warning(f"Primary mainnet RPC failed, trying fallback: {e}")
+                    config = make_mainnet(
+                        node_url="https://dydx-mainnet-rpc.allthatnode.com:1317",
+                        rest_indexer="https://indexer.dydx.trade",
+                        websocket_indexer="wss://indexer.dydx.trade/v4/ws"
+                    ).node
+            else:  # testnet
+                # Use official dYdX testnet endpoints from docs.dydx.xyz
+                testnet_endpoints = [
+                    {
+                        "node_url": "https://oegs-testnet.dydx.exchange:443",
+                        "rest_indexer": "https://indexer.v4testnet.dydx.exchange",
+                        "websocket_indexer": "wss://indexer.v4testnet.dydx.exchange/v4/ws"
+                    },
+                    {
+                        "node_url": "https://testnet-dydx-rpc.lavenderfive.com",
+                        "rest_indexer": "https://indexer.v4testnet.dydx.exchange",
+                        "websocket_indexer": "wss://indexer.v4testnet.dydx.exchange/v4/ws"
+                    },
+                    {
+                        "node_url": "https://test-dydx-rpc.kingnodes.com",
+                        "rest_indexer": "https://indexer.v4testnet.dydx.exchange",
+                        "websocket_indexer": "wss://indexer.v4testnet.dydx.exchange/v4/ws"
+                    },
+                    {
+                        "node_url": "https://dydx-testnet-rpc.polkachu.com",
+                        "rest_indexer": "https://indexer.v4testnet.dydx.exchange",
+                        "websocket_indexer": "wss://indexer.v4testnet.dydx.exchange/v4/ws"
+                    },
+                    {
+                        "node_url": "https://dydx-rpc-testnet.enigma-validator.com",
+                        "rest_indexer": "https://indexer.v4testnet.dydx.exchange",
+                        "websocket_indexer": "wss://indexer.v4testnet.dydx.exchange/v4/ws"
+                    }
+                ]
+                
+                config = None
+                for endpoint in testnet_endpoints:
+                    try:
+                        config = make_testnet(
+                            node_url=endpoint["node_url"],
+                            rest_indexer=endpoint["rest_indexer"],
+                            websocket_indexer=endpoint["websocket_indexer"]
+                        ).node
+                        logger.info(f"Using testnet endpoint: {endpoint['node_url']}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to configure testnet endpoint {endpoint['node_url']}: {e}")
+                        continue
+                
+                if config is None:
+                    raise ValueError("Failed to configure testnet endpoints")
             
-            node_client = NodeClient(
-                indexer_client=indexer_client,
-                chain_client=chain_client,
-                eth_private_key=account.key.hex(),
-            )
+            # Connect to the network using NodeClient.connect()
+            node_client = await NodeClient.connect(config)
+            
+            # Create wallet from mnemonic for signing transactions
+            try:
+                # Step 1: Derive address from mnemonic
+                # Create a temporary wallet to get the address
+                key_pair = KeyPair.from_mnemonic(user_mnemonic)
+                temp_wallet = Wallet(key_pair, 0, 0)
+                address = temp_wallet.address  # address is a property, not a method
+                
+                logger.info(f"Derived address from mnemonic: {address}")
+                
+                # Step 2: Create the actual wallet for signing transactions
+                wallet = await Wallet.from_mnemonic(node_client, user_mnemonic, address)
+                
+                # Store wallet in the client for later use
+                node_client._wallet = wallet
+                
+                logger.info(f"Wallet created successfully from mnemonic")
+            except Exception as e:
+                logger.error(f"Failed to create wallet from mnemonic: {e}")
+                raise ValueError(f"Wallet creation failed: {str(e)}")
 
             # Test connection
-            await node_client.get_last_block()
+            await node_client.latest_block_height()
 
             logger.info(f"dYdX client created for network {network_id}")
             return DydxClient(node_client)
@@ -131,30 +216,55 @@ class DydxClient:
             if not size or float(size) <= 0:
                 raise ValueError(f"Invalid size: {size}")
 
-            # Create market order
-            order_params = {
-                'symbol': symbol,
-                'side': side.upper(),
-                'type': 'MARKET',
-                'size': size,
-                'time_in_force': 'IOC',  # Immediate or Cancel
-            }
-
-            # Place the order
-            order_result = await client.node_client.place_order(**order_params)
-
-            logger.info(f"Market order placed: {symbol} {side} {size}")
-
-            return {
-                'success': True,
-                'order_id': order_result.get('orderId'),
-                'symbol': symbol,
-                'side': side.upper(),
-                'size': size,
-                'type': 'MARKET',
-                'status': order_result.get('status', 'PENDING'),
-                'timestamp': order_result.get('createdAt'),
-            }
+            # Place market order on dYdX V4
+            try:
+                # Get market info to convert symbol to market_id
+                markets = await client.node_client.get_markets()
+                market = None
+                for m in markets:
+                    if m.ticker == symbol:
+                        market = m
+                        break
+                
+                if not market:
+                    raise ValueError(f"Market not found for symbol: {symbol}")
+                
+                market_id = market.id
+                
+                # Convert size to quantums (smallest unit)
+                # For most assets, 1 quantum = 10^-8 of the asset
+                size_quantums = int(float(size) * 10**8)
+                
+                # Place order using node client
+                # Market orders use subticks = 0
+                order_result = await client.node_client.place_order(
+                    market_id=market_id,
+                    side=1 if side.upper() == 'BUY' else -1,  # 1 for BUY, -1 for SELL
+                    quantums=size_quantums,
+                    subticks=0,  # 0 for market order
+                    time_in_force=0,  # 0 for IOC (Immediate or Cancel)
+                    reduce_only=False,
+                    post_only=False,
+                    client_metadata=0
+                )
+                
+                logger.info(f"Market order placed successfully for {symbol}: {order_result}")
+                
+                return {
+                    'success': True,
+                    'order_id': str(order_result.get('order_id', 'unknown')),
+                    'symbol': symbol,
+                    'side': side.upper(),
+                    'size': size,
+                    'price': '0',
+                    'type': 'MARKET',
+                    'status': 'PENDING',
+                    'tx_hash': order_result.get('tx_hash')
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to place market order on dYdX: {e}")
+                raise
 
         except Exception as e:
             logger.error(f"Failed to place market order: {e}")
@@ -205,33 +315,67 @@ class DydxClient:
             if time_in_force not in ['GTT', 'IOC', 'FOK']:
                 raise ValueError(f"Invalid time_in_force: {time_in_force}")
 
-            # Create limit order
-            order_params = {
-                'symbol': symbol,
-                'side': side.upper(),
-                'type': 'LIMIT',
-                'size': size,
-                'price': price,
-                'time_in_force': time_in_force,
-            }
-
-            # Place the order
-            order_result = await client.node_client.place_order(**order_params)
-
-            logger.info(f"Limit order placed: {symbol} {side} {size} @ {price}")
-
-            return {
-                'success': True,
-                'order_id': order_result.get('orderId'),
-                'symbol': symbol,
-                'side': side.upper(),
-                'size': size,
-                'price': price,
-                'type': 'LIMIT',
-                'time_in_force': time_in_force,
-                'status': order_result.get('status', 'PENDING'),
-                'timestamp': order_result.get('createdAt'),
-            }
+            # Place limit order on dYdX V4
+            try:
+                # Get market info to convert symbol to market_id
+                markets = await client.node_client.get_markets()
+                market = None
+                for m in markets:
+                    if m.ticker == symbol:
+                        market = m
+                        break
+                
+                if not market:
+                    raise ValueError(f"Market not found for symbol: {symbol}")
+                
+                market_id = market.id
+                
+                # Convert size to quantums
+                size_quantums = int(float(size) * 10**8)
+                
+                # Convert price to subticks
+                # subticks = price * 10^8 / (10^-8) = price * 10^16
+                # But we need to account for the atomic unit of the quote asset
+                price_subticks = int(float(price) * 10**8)
+                
+                # Map time_in_force to dYdX values
+                tif_map = {
+                    'GTT': 0,  # Good-til-time
+                    'IOC': 1,  # Immediate or Cancel
+                    'FOK': 2,  # Fill or Kill
+                }
+                tif_value = tif_map.get(time_in_force, 0)
+                
+                # Place order using node client
+                order_result = await client.node_client.place_order(
+                    market_id=market_id,
+                    side=1 if side.upper() == 'BUY' else -1,  # 1 for BUY, -1 for SELL
+                    quantums=size_quantums,
+                    subticks=price_subticks,
+                    time_in_force=tif_value,
+                    reduce_only=False,
+                    post_only=False,
+                    client_metadata=0
+                )
+                
+                logger.info(f"Limit order placed successfully for {symbol}: {order_result}")
+                
+                return {
+                    'success': True,
+                    'order_id': str(order_result.get('order_id', 'unknown')),
+                    'symbol': symbol,
+                    'side': side.upper(),
+                    'size': size,
+                    'price': price,
+                    'type': 'LIMIT',
+                    'time_in_force': time_in_force,
+                    'status': 'PENDING',
+                    'tx_hash': order_result.get('tx_hash')
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to place limit order on dYdX: {e}")
+                raise
 
         except Exception as e:
             logger.error(f"Failed to place limit order: {e}")

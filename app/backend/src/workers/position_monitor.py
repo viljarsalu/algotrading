@@ -324,10 +324,10 @@ class PositionMonitorWorker:
         try:
             encryption_manager = get_encryption_manager()
 
-            # Decrypt dYdX mnemonic
-            dydx_mnemonic = None
-            if user.encrypted_dydx_mnemonic:
-                dydx_mnemonic = encryption_manager.decrypt(user.encrypted_dydx_mnemonic)
+            # Decrypt dYdX private key
+            dydx_private_key = None
+            if user.encrypted_dydx_private_key:
+                dydx_private_key = encryption_manager.decrypt(user.encrypted_dydx_private_key)
 
             # Decrypt Telegram credentials
             telegram_token = None
@@ -336,12 +336,12 @@ class PositionMonitorWorker:
                 telegram_token = encryption_manager.decrypt(user.encrypted_telegram_token)
                 telegram_chat_id = encryption_manager.decrypt(user.encrypted_telegram_chat_id)
 
-            if not dydx_mnemonic:
+            if not dydx_private_key:
                 logger.warning(f"No dYdX credentials found for user {user.wallet_address}")
                 return None
 
             return {
-                'dydx_mnemonic': dydx_mnemonic,
+                'dydx_private_key': dydx_private_key,
                 'telegram_token': telegram_token,
                 'telegram_chat_id': telegram_chat_id,
                 'wallet_address': user.wallet_address,

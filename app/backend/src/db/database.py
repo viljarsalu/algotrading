@@ -262,6 +262,27 @@ class DatabaseManager:
         finally:
             await session.close()
 
+    async def get_open_positions(self, wallet_address: str) -> list[Position]:
+        """Get open positions for a user.
+
+        Args:
+            wallet_address: User's wallet address
+
+        Returns:
+            List of user's open positions
+        """
+        session = self.async_session_factory()
+        try:
+            from sqlalchemy import select
+            result = await session.execute(
+                select(Position)
+                .where(Position.user_address == wallet_address, Position.status == "open")
+                .order_by(Position.opened_at.desc())
+            )
+            return result.scalars().all()
+        finally:
+            await session.close()
+
     async def create_position(self, position: Position) -> Position:
         """Create new position.
 

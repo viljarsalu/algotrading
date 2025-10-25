@@ -53,7 +53,7 @@ class DydxOrderMonitor:
         # Create dYdX client
         try:
             dydx_client = await DydxClient.create_client(
-                mnemonic=credentials['dydx_mnemonic'],
+                eth_private_key=credentials['dydx_private_key'],
                 network_id=1  # Mainnet
             )
         except Exception as e:

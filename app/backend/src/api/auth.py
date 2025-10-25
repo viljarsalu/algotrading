@@ -207,6 +207,8 @@ async def login(request: LoginRequest) -> LoginResponse:
             "created_at": user.created_at.isoformat(),
             "has_credentials": any([
                 user.encrypted_dydx_mnemonic,
+                user.encrypted_dydx_testnet_mnemonic,
+                user.encrypted_dydx_mainnet_mnemonic,
                 user.encrypted_telegram_token,
                 user.encrypted_telegram_chat_id
             ])

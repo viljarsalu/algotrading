@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     wallet_address VARCHAR(42) PRIMARY KEY,
     webhook_uuid VARCHAR(36) UNIQUE NOT NULL,
     encrypted_webhook_secret VARCHAR(500),
-    encrypted_dydx_mnemonic VARCHAR(500),
+    encrypted_dydx_private_key VARCHAR(500),
     encrypted_telegram_token VARCHAR(500),
     encrypted_telegram_chat_id VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

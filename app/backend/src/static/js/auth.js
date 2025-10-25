@@ -267,9 +267,9 @@ Sign this message to authenticate with your dYdX Trading Service account. This r
              console.log('Auth response data:', data);
 
              if (response.ok) {
-                 // Store authentication token
-                 sessionStorage.setItem('auth_token', data.access_token);
-                 sessionStorage.setItem('user_address', signatureData.address);
+                // Store authentication token (use localStorage for persistence across page navigations)
+                localStorage.setItem('auth_token', data.access_token);
+                localStorage.setItem('user_address', signatureData.address);
 
                  this.showSuccess();
                  return true;

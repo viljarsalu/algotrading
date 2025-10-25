@@ -8,8 +8,8 @@
 // Dashboard management class
 class DashboardManager {
     constructor() {
-        this.authToken = sessionStorage.getItem('auth_token');
-        this.userAddress = sessionStorage.getItem('user_address');
+        this.authToken = localStorage.getItem('auth_token');
+        this.userAddress = localStorage.getItem('user_address');
         this.currentTab = 'credentials';
 
         // Equity Curve properties
@@ -26,7 +26,7 @@ class DashboardManager {
     }
 
     /**
-     * Initialize dashboard
+     * Initialize dashboard data
      */
     async initialize() {
         try {
@@ -35,9 +35,6 @@ class DashboardManager {
 
             // Load account balance
             await this.loadAccountBalance();
-
-            // Set up event listeners
-            this.setupEventListeners();
 
             // Update user address display
             this.updateUserAddress();
@@ -49,6 +46,16 @@ class DashboardManager {
             console.error('Dashboard initialization error:', error);
             this.showError('Failed to load dashboard. Please refresh the page.');
         }
+    }
+
+    /**
+     * Initialize event listeners after the DOM is fully loaded
+     */
+    initializeEventListeners() {
+        this.setupTabListeners();
+        this.setupFormListeners();
+        this.setupButtonListeners();
+        this.setupLogoutListener();
     }
 
     /**
@@ -72,10 +79,12 @@ class DashboardManager {
             }
 
             const data = await response.json();
+            console.log('Dashboard response:', response.status, data);
 
             if (response.ok) {
                 this.updateDashboardData(data);
             } else {
+                console.error('Dashboard API error:', data);
                 this.showError(data.detail || 'Failed to load dashboard data.');
             }
 
@@ -106,27 +115,25 @@ class DashboardManager {
                 new Date(data.user_profile.created_at).toLocaleDateString() : '';
             document.getElementById('account-age').textContent = data.user_profile.account_age_days || '0';
             
-            // Auto-populate dYdX wallet address (same as authenticated address)
-            document.getElementById('dydx-address').value = data.user_profile.wallet_address || '';
+            // Store profile data for later use
+            this.userProfile = data.user_profile;
         }
 
-        // Handle mnemonic field - NEVER display the actual mnemonic
+        // Handle network selection and mnemonic field
+        const networkField = document.getElementById('dydx-network');
         const mnemonicField = document.getElementById('dydx-mnemonic');
-        const mnemonicStatus = document.getElementById('mnemonic-status');
+        const mnemonicStatus = document.getElementById('private-key-status');
         
-        if (data.credentials_status.dydx_configured) {
-            // Clear the field and show status
-            mnemonicField.value = '';
-            mnemonicField.placeholder = 'Mnemonic already configured securely (leave blank to keep current)';
-            if (mnemonicStatus) {
-                mnemonicStatus.classList.remove('hidden');
-            }
-        } else {
-            mnemonicField.placeholder = 'Enter your 12 or 24 word mnemonic phrase';
-            if (mnemonicStatus) {
-                mnemonicStatus.classList.add('hidden');
-            }
+        // Store credentials status for later use
+        this.credentialsStatus = data.credentials_status;
+        
+        if (networkField) {
+            // Add event listener for network changes
+            networkField.addEventListener('change', () => this.updateMnemonicFieldStatus());
         }
+        
+        // Initial mnemonic field status based on selected network
+        this.updateMnemonicFieldStatus();
 
         // Handle Telegram credentials - NEVER display after saving
         const telegramTokenField = document.getElementById('telegram-token');
@@ -134,28 +141,30 @@ class DashboardManager {
         const telegramTokenStatus = document.getElementById('telegram-token-status');
         const telegramChatIdStatus = document.getElementById('telegram-chatid-status');
         
-        if (data.credentials_status.telegram_configured) {
-            // Clear the fields and show status
-            telegramTokenField.value = '';
-            telegramChatIdField.value = '';
-            telegramTokenField.placeholder = 'Token already configured securely (leave blank to keep current)';
-            telegramChatIdField.placeholder = 'Chat ID already configured securely (leave blank to keep current)';
-            
-            if (telegramTokenStatus) {
-                telegramTokenStatus.classList.remove('hidden');
-            }
-            if (telegramChatIdStatus) {
-                telegramChatIdStatus.classList.remove('hidden');
-            }
-        } else {
-            telegramTokenField.placeholder = '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11';
-            telegramChatIdField.placeholder = '-1001234567890';
-            
-            if (telegramTokenStatus) {
-                telegramTokenStatus.classList.add('hidden');
-            }
-            if (telegramChatIdStatus) {
-                telegramChatIdStatus.classList.add('hidden');
+        if (telegramTokenField && telegramChatIdField) {
+            if (data.credentials_status.telegram_configured) {
+                // Clear the fields and show status
+                telegramTokenField.value = '';
+                telegramChatIdField.value = '';
+                telegramTokenField.placeholder = 'Token already configured securely (leave blank to keep current)';
+                telegramChatIdField.placeholder = 'Chat ID already configured securely (leave blank to keep current)';
+                
+                if (telegramTokenStatus) {
+                    telegramTokenStatus.classList.remove('hidden');
+                }
+                if (telegramChatIdStatus) {
+                    telegramChatIdStatus.classList.remove('hidden');
+                }
+            } else {
+                telegramTokenField.placeholder = '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11';
+                telegramChatIdField.placeholder = '-1001234567890';
+                
+                if (telegramTokenStatus) {
+                    telegramTokenStatus.classList.add('hidden');
+                }
+                if (telegramChatIdStatus) {
+                    telegramChatIdStatus.classList.add('hidden');
+                }
             }
         }
 
@@ -339,20 +348,20 @@ class DashboardManager {
      * Set up form submission listeners
      */
     setupFormListeners() {
-        // dYdX credentials form
-        const dydxForm = document.getElementById('dydx-form');
-        if (dydxForm) {
-            dydxForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
+        console.log('Attaching direct click listeners to save buttons.');
+
+        const saveDydxBtn = document.getElementById('save-dydx-credentials-btn');
+        if (saveDydxBtn) {
+            saveDydxBtn.addEventListener('click', async () => {
+                console.log('Save dYdX button clicked.');
                 await this.saveDydxCredentials();
             });
         }
 
-        // Telegram credentials form
-        const telegramForm = document.getElementById('telegram-form');
-        if (telegramForm) {
-            telegramForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
+        const saveTelegramBtn = document.getElementById('save-telegram-credentials-btn');
+        if (saveTelegramBtn) {
+            saveTelegramBtn.addEventListener('click', async () => {
+                console.log('Save Telegram button clicked.');
                 await this.saveTelegramCredentials();
             });
         }
@@ -399,6 +408,14 @@ class DashboardManager {
         if (refreshBalanceBtn) {
             refreshBalanceBtn.addEventListener('click', async () => {
                 await this.loadAccountBalance();
+            });
+        }
+
+        // Refresh positions button
+        const refreshPositionsBtn = document.getElementById('refresh-positions');
+        if (refreshPositionsBtn) {
+            refreshPositionsBtn.addEventListener('click', async () => {
+                await this.loadOpenPositions();
             });
         }
         
@@ -611,6 +628,8 @@ class DashboardManager {
         // Load tab-specific data
         if (tabName === 'webhook') {
             this.loadWebhookInfo();
+        } else if (tabName === 'profile') {
+            this.loadOpenPositions();
         } else if (tabName === 'equity') {
             this.fetchEquityData();
             this.fetchEquitySummary();
@@ -618,19 +637,110 @@ class DashboardManager {
     }
 
     /**
+     * Update address and mnemonic fields based on selected network
+     */
+    updateMnemonicFieldStatus() {
+        const networkField = document.getElementById('dydx-network');
+        const addressField = document.getElementById('dydx-address');
+        const mnemonicField = document.getElementById('dydx-mnemonic');
+        const mnemonicStatus = document.getElementById('private-key-status');
+        const badge = document.getElementById('dydx-badge');
+        
+        if (!networkField || !mnemonicField) {
+            return;
+        }
+        
+        const selectedNetwork = networkField.value;
+        let isConfigured = false;
+        let address = '';
+        
+        // Load address and check if credentials are configured for the selected network
+        if (this.userProfile) {
+            if (selectedNetwork === '11155111') {
+                address = this.userProfile.dydx_testnet_address || '';
+            } else if (selectedNetwork === '1') {
+                address = this.userProfile.dydx_mainnet_address || '';
+            }
+        }
+        
+        // Check configuration status
+        if (this.credentialsStatus) {
+            if (selectedNetwork === '11155111') {
+                isConfigured = this.credentialsStatus.dydx_testnet_configured;
+            } else if (selectedNetwork === '1') {
+                isConfigured = this.credentialsStatus.dydx_mainnet_configured;
+            }
+        }
+        
+        // Update address field
+        if (addressField) {
+            addressField.value = address;
+        }
+        
+        // Update badge based on current network configuration
+        if (badge) {
+            if (isConfigured) {
+                badge.textContent = 'Ready';
+                badge.className = 'ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700';
+            } else {
+                badge.textContent = 'Required';
+                badge.className = 'ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700';
+            }
+        }
+        
+        // Clear the mnemonic field (never show actual mnemonic)
+        mnemonicField.value = '';
+        
+        if (isConfigured) {
+            mnemonicField.placeholder = 'Mnemonic phrase already configured securely (leave blank to keep current)';
+            if (mnemonicStatus) {
+                mnemonicStatus.classList.remove('hidden');
+            }
+        } else {
+            mnemonicField.placeholder = 'word1 word2 word3 word4 ... (12 or 24 words)';
+            if (mnemonicStatus) {
+                mnemonicStatus.classList.add('hidden');
+            }
+        }
+    }
+
+    /**
      * Save dYdX credentials
      */
     async saveDydxCredentials() {
+        const addressField = document.getElementById('dydx-address');
+        const networkField = document.getElementById('dydx-network');
         const mnemonicField = document.getElementById('dydx-mnemonic');
+        const address = addressField.value.trim();
+        const network = networkField.value;
         const mnemonic = mnemonicField.value.trim();
 
+        if (!address) {
+            this.showError('Please enter your dYdX wallet address.');
+            return;
+        }
+
         if (!mnemonic) {
-            this.showError('Please enter your dYdX mnemonic phrase.');
+            this.showError('Please enter your dYdX V4 mnemonic phrase.');
             return;
         }
 
         try {
             this.showLoading('Saving dYdX credentials...');
+
+            // Prepare request body based on selected network
+            const requestBody = {
+                dydx_network_id: parseInt(network)
+            };
+
+            // Send address and mnemonic to appropriate fields based on network
+            if (network === '11155111') {
+                requestBody.dydx_testnet_address = address;
+                requestBody.dydx_testnet_mnemonic = mnemonic;
+            } else if (network === '1') {
+                requestBody.dydx_mainnet_address = address;
+                requestBody.dydx_mainnet_mnemonic = mnemonic;
+            }
 
             const response = await fetch('/api/user/credentials', {
                 method: 'POST',
@@ -638,12 +748,11 @@ class DashboardManager {
                     'Authorization': `Bearer ${this.authToken}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    dydx_mnemonic: mnemonic
-                })
+                body: JSON.stringify(requestBody)
             });
 
             const data = await response.json();
+            console.log('Save credentials response:', response.status, data);
 
             if (response.ok) {
                 // SECURITY: Clear the mnemonic from the field immediately after saving
@@ -653,6 +762,7 @@ class DashboardManager {
                 await this.loadDashboardData(); // Refresh status
                 await this.loadAccountBalance(); // Refresh balance
             } else {
+                console.error('Save credentials failed:', data);
                 this.showError(data.detail || 'Failed to save dYdX credentials.');
             }
 
@@ -1010,8 +1120,8 @@ class DashboardManager {
             console.error('Logout error:', error);
         } finally {
             // Clear local storage
-            sessionStorage.removeItem('auth_token');
-            sessionStorage.removeItem('user_address');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_address');
 
             // Redirect to login
             window.location.href = '/login';
@@ -1108,11 +1218,88 @@ class DashboardManager {
     }
 
     /**
+     * Load and display open positions
+     */
+    async loadOpenPositions() {
+        try {
+            const response = await fetch('/api/user/positions', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            if (response.status === 401) {
+                this.redirectToLogin();
+                return;
+            }
+
+            const data = await response.json();
+            const positionsList = document.getElementById('positions-list');
+
+            if (response.ok && data.success && data.positions.length > 0) {
+                positionsList.innerHTML = data.positions.map(pos => `
+                    <div class="bg-gray-800/50 p-4 rounded-md border border-gray-700 hover:border-dydx-blue transition-colors">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-3">
+                                <div class="flex-shrink-0">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${pos.side.toUpperCase() === 'BUY' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}">
+                                        ${pos.side.toUpperCase()}
+                                    </span>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium text-white">${pos.symbol}</div>
+                                    <div class="text-xs text-gray-400">ID: ${pos.id}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-medium text-white">${parseFloat(pos.size).toFixed(4)}</div>
+                                <div class="text-xs text-gray-400">Size</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <div class="text-gray-400">Entry Price</div>
+                                <div class="text-white font-mono">$${parseFloat(pos.entry_price).toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-400">Status</div>
+                                <div class="text-white capitalize">${pos.status}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-400">Opened</div>
+                                <div class="text-white">${new Date(pos.opened_at).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else if (response.ok && data.success) {
+                positionsList.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">No open positions</div>';
+            } else {
+                positionsList.innerHTML = `<div class="text-sm text-red-400 text-center py-4">${data.error || 'Failed to load positions'}</div>`;
+            }
+
+        } catch (error) {
+            console.error('Load positions error:', error);
+            const positionsList = document.getElementById('positions-list');
+            positionsList.innerHTML = '<div class="text-sm text-red-400 text-center py-4">Failed to load positions</div>';
+        }
+    }
+
+    /**
      * Redirect to login page
      */
     redirectToLogin() {
+        // Clear stored credentials before redirecting
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_address');
         window.location.href = '/login';
     }
-
-
 }
+
+// Main execution: Wait for the DOM to be fully loaded before initializing the dashboard.
+document.addEventListener('DOMContentLoaded', () => {
+    const dashboardManager = new DashboardManager();
+    dashboardManager.initializeEventListeners();
+});

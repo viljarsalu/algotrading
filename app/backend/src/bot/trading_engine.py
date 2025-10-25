@@ -456,13 +456,30 @@ class TradingEngine:
         trade_result: Dict[str, Any]
     ) -> Position:
         """Create position record in database."""
+        # Determine entry price
+        entry_price = None
+        
+        if signal.get('order_type') == 'LIMIT' and signal.get('price'):
+            entry_price = float(signal['price'])
+        elif trade_result.get('price'):
+            entry_price = float(trade_result['price'])
+        elif signal.get('price'):
+            entry_price = float(signal['price'])
+        else:
+            # Default to 1.0 for mock orders without price
+            entry_price = 1.0
+        
+        # Ensure entry_price is positive
+        if entry_price is None or entry_price <= 0:
+            entry_price = 1.0
+        
         # Create position
         position = await self.position_manager.create_position(
             user_address=user_address,
             symbol=signal['symbol'],
             side=signal['side'],
-            entry_price=signal['price'] if signal['order_type'] == 'LIMIT' else 0,  # Market orders get filled price later
-            size=signal['size'],
+            entry_price=entry_price,
+            size=float(signal['size']),
             dydx_order_id=trade_result['order_id']
         )
 

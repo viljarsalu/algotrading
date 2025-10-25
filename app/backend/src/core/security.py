@@ -294,6 +294,90 @@ class CredentialValidator:
         }
 
     @staticmethod
+    def validate_dydx_mnemonic(mnemonic: str) -> Dict[str, Any]:
+        """Validate dYdX V4 mnemonic phrase.
+
+        Args:
+            mnemonic: BIP39 mnemonic phrase (12 or 24 words)
+
+        Returns:
+            Dict with validation results and any error messages
+        """
+        errors = []
+
+        # Check if mnemonic is provided
+        if not mnemonic or not mnemonic.strip():
+            errors.append("Mnemonic cannot be empty")
+            return {'valid': False, 'errors': errors}
+
+        # Normalize mnemonic (strip whitespace, convert to lowercase)
+        normalized_mnemonic = mnemonic.strip().lower()
+        mnemonic_words = normalized_mnemonic.split()
+
+        # Validate word count (BIP39 standard: 12, 15, 18, 21, or 24 words)
+        valid_word_counts = [12, 15, 18, 21, 24]
+        if len(mnemonic_words) not in valid_word_counts:
+            errors.append(f"Mnemonic must contain 12, 15, 18, 21, or 24 words. Got {len(mnemonic_words)} words")
+
+        # Check for common mnemonic validation patterns
+        if not all(len(word) >= 3 for word in mnemonic_words):
+            errors.append("All mnemonic words must be at least 3 characters")
+
+        # Check for invalid characters
+        if not all(word.isalpha() for word in mnemonic_words):
+            errors.append("Mnemonic words must contain only alphabetic characters")
+
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'normalized_mnemonic': normalized_mnemonic if len(errors) == 0 else None
+        }
+
+    @staticmethod
+    def validate_dydx_private_key(private_key: str) -> Dict[str, Any]:
+        """Validate dYdX V4 API private key (deprecated - use mnemonic instead).
+
+        Args:
+            private_key: Ethereum private key (0x-prefixed hex string)
+
+        Returns:
+            Dict with validation results and any error messages
+        """
+        errors = []
+
+        # Check if key is provided
+        if not private_key or not private_key.strip():
+            errors.append("Private key cannot be empty")
+            return {'valid': False, 'errors': errors}
+
+        # Normalize key (add 0x prefix if missing)
+        key = private_key.strip()
+        if not key.startswith('0x'):
+            key = '0x' + key
+
+        # Validate hex format
+        if len(key) != 66:  # 0x + 64 hex characters
+            errors.append("Private key must be 66 characters (0x + 64 hex characters)")
+        else:
+            try:
+                int(key, 16)
+            except ValueError:
+                errors.append("Private key must be a valid hex string")
+
+        # Try to create an account from the key to validate it works
+        if not errors:
+            try:
+                Account.from_key(key)
+            except Exception as e:
+                errors.append(f"Invalid private key: {str(e)}")
+
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'normalized_key': key if len(errors) == 0 else None
+        }
+
+    @staticmethod
     def validate_telegram_credentials(telegram_token: str, telegram_chat_id: str) -> Dict[str, Any]:
         """Validate Telegram bot credentials.
 

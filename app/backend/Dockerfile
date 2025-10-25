@@ -52,7 +52,7 @@ COPY backend/requirements.txt backend/pyproject.toml backend/README.md ./
 RUN poetry config virtualenvs.create false
 
 # Generate lock file if needed and install dependencies
-RUN poetry lock --no-interaction && poetry install --only main --no-interaction --no-ansi
+RUN poetry lock --no-interaction && poetry install --no-interaction --no-ansi
 
 # Copy application code
 COPY backend/src/ ./src/

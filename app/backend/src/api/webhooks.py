@@ -284,6 +284,33 @@ class CredentialManager:
             # Decrypt all user credentials
             credentials = {}
 
+            # dYdX mnemonic (required for trading)
+            # Determine which mnemonic to use based on network
+            network_id = user.dydx_network_id or 11155111
+            
+            if network_id == 11155111:  # testnet
+                encrypted_mnemonic = user.encrypted_dydx_testnet_mnemonic
+                network_name = "testnet"
+            else:  # mainnet
+                encrypted_mnemonic = user.encrypted_dydx_mainnet_mnemonic
+                network_name = "mainnet"
+            
+            if encrypted_mnemonic:
+                try:
+                    credentials['dydx_mnemonic'] = encryption_manager.decrypt(
+                        encrypted_mnemonic
+                    )
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Failed to decrypt dYdX {network_name} mnemonic: {str(e)}"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"dYdX {network_name} mnemonic not configured"
+                )
+
             # Telegram credentials (required for notifications)
             if user.encrypted_telegram_token:
                 try:
@@ -457,19 +484,19 @@ class TradeOrchestrator:
                 return step_result
 
             # Step 3: Trade execution on dYdX
-            step_result = await self.step_3_trade_execution(credentials, step_result['risk_parameters'])
-            if not step_result['success']:
-                await self._send_error_notification(credentials, "Trade execution failed", step_result['error'])
-                return step_result
+            trade_result = await self.step_3_trade_execution(user, credentials, step_result['risk_parameters'])
+            if not trade_result['success']:
+                await self._send_error_notification(credentials, "Trade execution failed", trade_result['error'])
+                return trade_result
 
             # Step 4: Position persistence to database
-            step_result = await self.step_4_position_persistence(user, step_result['trade_result'], signal_data)
-            if not step_result['success']:
-                await self._send_error_notification(credentials, "Position persistence failed", step_result['error'])
-                return step_result
+            position_result = await self.step_4_position_persistence(user, trade_result['trade_result'], signal_data)
+            if not position_result['success']:
+                await self._send_error_notification(credentials, "Position persistence failed", position_result['error'])
+                return position_result
 
             # Step 5: Notification delivery
-            step_result = await self.step_5_notification_delivery(credentials, step_result['position'], step_result['trade_result'])
+            step_result = await self.step_5_notification_delivery(credentials, position_result['position'], trade_result['trade_result'])
             if not step_result['success']:
                 webhook_logger.warning(
                     "Notification delivery failed, but trade was successful",
@@ -483,18 +510,18 @@ class TradeOrchestrator:
             webhook_logger.info(
                 "Complete trade execution successful",
                 user_address=user.wallet_address,
-                position_id=step_result['position'].id,
+                position_id=position_result['position'].id,
                 execution_time_seconds=round(execution_time, 3)
             )
 
             return {
                 'success': True,
-                'position_id': step_result['position'].id,
-                'order_id': step_result['trade_result'].get('order_id'),
+                'position_id': position_result['position'].id,
+                'order_id': trade_result['trade_result'].get('order_id'),
                 'symbol': signal_data.get('symbol'),
                 'side': signal_data.get('side'),
                 'size': signal_data.get('size'),
-                'price': step_result['trade_result'].get('price'),
+                'price': trade_result['trade_result'].get('price'),
                 'execution_time_seconds': round(execution_time, 3),
                 'timestamp': datetime.utcnow().isoformat()
             }
@@ -627,12 +654,14 @@ class TradeOrchestrator:
 
     async def step_3_trade_execution(
         self,
+        user: User,
         credentials: Dict[str, str],
         risk_parameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Step 3: Execute trade on dYdX.
 
         Args:
+            user: User model instance
             credentials: User credentials
             risk_parameters: Validated risk parameters
 
@@ -640,8 +669,22 @@ class TradeOrchestrator:
             Step result with trade result or error
         """
         try:
-            # Create dYdX client
-            dydx_client = await DydxClient.create_client()
+            # Create dYdX client with user's mnemonic and network
+            dydx_mnemonic = credentials.get('dydx_mnemonic')
+            if not dydx_mnemonic:
+                return {
+                    'success': False,
+                    'error': 'dYdX mnemonic not available in credentials',
+                    'step': 'trade_execution'
+                }
+            
+            # Use user's configured network ID, default to testnet
+            network_id = user.dydx_network_id or 11155111
+            
+            dydx_client = await DydxClient.create_client(
+                network_id=network_id,
+                mnemonic=dydx_mnemonic
+            )
 
             # Execute the trade using existing trading engine logic
             signal = risk_parameters['signal']
@@ -696,24 +739,42 @@ class TradeOrchestrator:
                 }
 
             symbol = signal_data.get('symbol')
-            side = signal_data.get('side')
+            side = signal_data.get('side', '').upper()
             size = signal_data.get('size')
             price = signal_data.get('price')
 
             if not all([symbol, side, size]):
                 return {
                     'success': False,
-                    'error': 'Missing required signal data for position creation',
+                    'error': f'Missing required signal data for position creation. Got: symbol={symbol}, side={side}, size={size}',
                     'step': 'position_persistence'
                 }
 
             # Create position record using existing position manager
+            # Ensure size and entry_price are floats FIRST
+            try:
+                size_float = float(size) if size else 0.01
+                entry_price_float = float(price) if price else float(trade_result.get('price', 1.0))
+            except (ValueError, TypeError) as e:
+                return {
+                    'success': False,
+                    'error': f'Invalid size or price format: {str(e)}',
+                    'step': 'position_persistence'
+                }
+            
+            # Validate values are positive
+            if entry_price_float <= 0:
+                entry_price_float = 1.0
+            
+            if size_float <= 0:
+                size_float = 0.01
+            
             position = await self.trading_engine.position_manager.create_position(
                 user_address=user.wallet_address,
                 symbol=symbol,
                 side=side,
-                entry_price=price if price else 0,  # Market orders get filled price later
-                size=size,
+                entry_price=entry_price_float,
+                size=size_float,
                 dydx_order_id=trade_result.get('order_id', '')
             )
 
@@ -845,8 +906,18 @@ class TradeOrchestrator:
                 user, "default_master_key", self.db
             )
 
-            # Create dYdX client for rollback
-            dydx_client = await DydxClient.create_client()
+            # Create dYdX client for rollback with user's mnemonic and network
+            dydx_mnemonic = credentials.get('dydx_mnemonic')
+            if not dydx_mnemonic:
+                raise ValueError('dYdX mnemonic not available in credentials')
+            
+            # Use user's configured network ID
+            network_id = user.dydx_network_id or 11155111
+            
+            dydx_client = await DydxClient.create_client(
+                network_id=network_id,
+                mnemonic=dydx_mnemonic
+            )
 
             rollback_actions = []
 
@@ -1871,12 +1942,12 @@ class WebhookTestingUtilities:
             })
 
         # Check dYdX credentials
-        if not user.encrypted_dydx_mnemonic:
+        if not user.encrypted_dydx_private_key:
             issues.append({
-                'field': 'dydx_mnemonic',
-                'issue': 'dYdX mnemonic not configured',
+                'field': 'dydx_private_key',
+                'issue': 'dYdX private key not configured',
                 'severity': 'critical',
-                'fix': 'Configure dYdX wallet mnemonic for trading'
+                'fix': 'Configure dYdX V4 API private key for trading'
             })
 
         # Check Telegram credentials
@@ -2044,6 +2115,11 @@ class WebhookRouter:
 
             if not is_valid:
                 return await self.handle_verification_failure(auth_error, webhook_uuid)
+
+            # Step 1.5: Check if user has configured their mnemonic (REQUIRED for trading)
+            if not (user.encrypted_dydx_mnemonic or user.encrypted_dydx_testnet_mnemonic or user.encrypted_dydx_mainnet_mnemonic):
+                error_msg = "dYdX mnemonic not configured. Please configure your mnemonic phrase in the dashboard before trading."
+                return await self.handle_verification_failure(error_msg, webhook_uuid)
 
             # Step 2: Validate request format
             is_valid_format, format_error = await WebhookAuthenticator.validate_request_format(

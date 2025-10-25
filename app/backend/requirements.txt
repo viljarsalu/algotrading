@@ -26,7 +26,7 @@ web3[py]==6.11.1
 eth-account==0.10.0
 
 # dYdX Protocol Integration
-dydx-v4-client
+dydx-v4-client[chain,indexer]
 
 # HTTP Client for external APIs
 httpx==0.25.2

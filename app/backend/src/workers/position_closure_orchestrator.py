@@ -135,7 +135,7 @@ class PositionClosureOrchestrator:
         try:
             # Create dYdX client
             dydx_client = await DydxClient.create_client(
-                mnemonic=credentials['dydx_mnemonic'],
+                eth_private_key=credentials['dydx_private_key'],
                 network_id=1
             )
 

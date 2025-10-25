@@ -36,9 +36,34 @@ class User(SQLModel, table=True):
         description="Encrypted webhook secret for API authentication"
     )
 
+    dydx_testnet_address: Optional[str] = Field(
+        max_length=100,
+        description="dYdX testnet wallet address (dydx1...)"
+    )
+
+    dydx_mainnet_address: Optional[str] = Field(
+        max_length=100,
+        description="dYdX mainnet wallet address (dydx1...)"
+    )
+
     encrypted_dydx_mnemonic: Optional[str] = Field(
         max_length=500,
-        description="Encrypted dYdX wallet mnemonic phrase"
+        description="Encrypted dYdX V4 mnemonic phrase (12-24 words)"
+    )
+
+    encrypted_dydx_testnet_mnemonic: Optional[str] = Field(
+        max_length=500,
+        description="Encrypted dYdX V4 testnet mnemonic phrase (24 words)"
+    )
+
+    encrypted_dydx_mainnet_mnemonic: Optional[str] = Field(
+        max_length=500,
+        description="Encrypted dYdX V4 mainnet mnemonic phrase (24 words)"
+    )
+
+    dydx_network_id: Optional[int] = Field(
+        default=11155111,
+        description="dYdX network ID (1 for mainnet, 11155111 for testnet)"
     )
 
     encrypted_telegram_token: Optional[str] = Field(
@@ -90,6 +115,12 @@ class Position(SQLModel, table=True):
     symbol: str = Field(
         max_length=20,
         description="Trading pair symbol (e.g., 'BTC-USD', 'ETH-USD')"
+    )
+
+    # Position side
+    side: str = Field(
+        max_length=10,
+        description="Position side: BUY or SELL"
     )
 
     # Position status

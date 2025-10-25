@@ -60,23 +60,60 @@ class PositionManager:
             ValueError: If position data is invalid
         """
         try:
-            # Validate inputs
-            if not user_address or not user_address.startswith('0x'):
+            # Validate and convert inputs
+            if not user_address:
                 raise ValueError("Invalid user address")
+            
+            # Allow both 0x and dydx addresses
+            if not (user_address.startswith('0x') or user_address.startswith('dydx')):
+                raise ValueError("Invalid user address format")
 
             if not symbol or '-' not in symbol:
                 raise ValueError("Invalid symbol format")
 
-            if side.upper() not in ['BUY', 'SELL']:
+            if not side or side.upper() not in ['BUY', 'SELL']:
                 raise ValueError("Invalid side")
 
-            if entry_price <= 0 or size <= 0:
-                raise ValueError("Invalid price or size")
+            # Convert to float - be very explicit about type conversion
+            if entry_price is None:
+                entry_price_float = 1.0
+            else:
+                try:
+                    entry_price_float = float(entry_price)
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert entry_price to float: {entry_price} (type: {type(entry_price)}), error: {e}")
+                    raise ValueError(f"Invalid entry_price format: {entry_price}")
+            
+            if size is None:
+                raise ValueError("Size cannot be None")
+            else:
+                try:
+                    size_float = float(size)
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert size to float: {size} (type: {type(size)}), error: {e}")
+                    raise ValueError(f"Invalid size format: {size}")
+
+            # Validate values are positive
+            if not isinstance(entry_price_float, float):
+                raise ValueError(f"entry_price_float is not float: {type(entry_price_float)}")
+            if not isinstance(size_float, float):
+                raise ValueError(f"size_float is not float: {type(size_float)}")
+            
+            if entry_price_float <= 0:
+                entry_price_float = 1.0
+            
+            if size_float <= 0:
+                raise ValueError(f"Invalid size: {size_float}")
 
             # Check if user exists
-            user = self.db.exec(
-                select(User).where(User.wallet_address == user_address)
-            ).first()
+            try:
+                result = await self.db.execute(
+                    select(User).where(User.wallet_address == user_address)
+                )
+                user = result.scalars().first()
+            except Exception as e:
+                logger.error(f"Failed to query user: {e}")
+                raise ValueError(f"User not found: {user_address}")
 
             if not user:
                 raise ValueError(f"User not found: {user_address}")
@@ -85,9 +122,10 @@ class PositionManager:
             position = Position(
                 user_address=user_address,
                 symbol=symbol,
+                side=side.upper(),
                 status="open",
-                entry_price=Decimal(str(entry_price)),
-                size=Decimal(str(size)),
+                entry_price=Decimal(str(entry_price_float)),
+                size=Decimal(str(size_float)),
                 dydx_order_id=dydx_order_id,
                 tp_order_id=tp_order_id,
                 sl_order_id=sl_order_id,
@@ -96,14 +134,14 @@ class PositionManager:
 
             # Save to database
             self.db.add(position)
-            self.db.commit()
-            self.db.refresh(position)
+            await self.db.commit()
+            await self.db.refresh(position)
 
             logger.info(f"Position created: {position.id} for user {user_address}")
             return position
 
         except Exception as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Failed to create position: {e}")
             raise ValueError(f"Position creation failed: {str(e)}")
 

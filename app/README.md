@@ -467,3 +467,17 @@ curl http://localhost:8000/api/errors/system-health
 # Tests
 docker-compose exec backend poetry run pytest tests/test_trading_audit.py -v
 ```
+
+
+
+```bash
+curl -X POST http://localhost:8000/api/webhooks/signal/b05270eb-a217-4dee-b64f-c544dbe04d84 \
+-H "Content-Type: application/json" \
+-d '{
+  "secret": "76a407c93672879288f513a6c02974007a790aaec8902637d48cda03e1929dc4",
+  "symbol": "BTC-USD",
+  "side": "buy",
+  "size": 0.01,
+  "price": 65000
+}'
+```
