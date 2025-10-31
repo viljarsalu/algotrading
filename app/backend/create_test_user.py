@@ -25,8 +25,8 @@ async def create_test_user():
         db_manager = get_database_manager()
         
         # The webhook UUID and secret from your curl request
-        webhook_uuid = '61420327-f983-4c36-b736-6d9aaaa25623'
-        webhook_secret = '8002009ce1ceda78c1e69308c88af2b085109db7e63fb68cc75bfb7dc4bdf129'
+        webhook_uuid = 'a911ece1-2c78-41d8-a235-dca941539af9'
+        webhook_secret = '0cf6fd0c3c296ac70a9ce21028bf7136c1b00d5aeed225e529117971d8ad86e8'
         
         # Check if user already exists
         print(f"Checking if user exists with webhook UUID: {webhook_uuid}")
@@ -43,11 +43,17 @@ async def create_test_user():
         encrypted_secret = encrypt_sensitive_data(webhook_secret)
         print(f"Webhook secret encrypted successfully")
         
-        # Create test user
+        # Create test user with dYdX testnet mnemonic
+        # This is a test mnemonic - replace with your actual mnemonic for production
+        test_mnemonic = "test walk nut penalty hip pave soap entry language right filter choice"
+        encrypted_mnemonic = encrypt_sensitive_data(test_mnemonic)
+        
         test_user = User(
-            wallet_address='0xTest1234567890123456789012345678901234567',
+            wallet_address='0x1234567890123456789012345678901234567890',
             webhook_uuid=webhook_uuid,
-            encrypted_webhook_secret=encrypted_secret
+            encrypted_webhook_secret=encrypted_secret,
+            encrypted_dydx_testnet_mnemonic=encrypted_mnemonic,
+            dydx_network_id=11155111  # Testnet
         )
         
         # Save to database

@@ -7,6 +7,8 @@ and dashboard data for authenticated users.
 
 import secrets
 import logging
+import asyncio
+import httpx
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -25,6 +27,15 @@ from ..db.database import get_database_manager
 from ..db.models import User
 from .auth import get_current_user
 from ..bot.dydx_client import DydxClient
+
+# Import faucet client for testnet funds
+try:
+    from dydx_v4_client.network import TESTNET_FAUCET
+    from dydx_v4_client.faucet_client import FaucetClient
+    FAUCET_AVAILABLE = True
+except ImportError:
+    FAUCET_AVAILABLE = False
+    logger.warning("FaucetClient not available")
 
 # Create router
 router = APIRouter(prefix="/api/user", tags=["user-management"])
@@ -94,6 +105,13 @@ class OpenPositionsResponse(BaseModel):
     """Response model for open positions."""
     success: bool = Field(..., description="Whether the request was successful")
     positions: list[PositionData] = Field(default_factory=list, description="List of open positions")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+class TestnetFundsResponse(BaseModel):
+    """Response model for testnet funds request."""
+    success: bool = Field(..., description="Whether the request was successful")
+    message: str = Field(..., description="Status message")
+    address: str = Field(..., description="Wallet address that received funds")
     error: Optional[str] = Field(None, description="Error message if failed")
 
 # API Endpoints
@@ -292,14 +310,16 @@ async def get_account_balance(current_user: str = Depends(get_current_user)) -> 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-        if not user.encrypted_dydx_private_key:
+        # Check for testnet or mainnet mnemonic
+        mnemonic_encrypted = user.encrypted_dydx_testnet_mnemonic or user.encrypted_dydx_mainnet_mnemonic or user.encrypted_dydx_mnemonic
+        if not mnemonic_encrypted:
             return AccountBalanceResponse(
                 success=False,
                 error="dYdX mnemonic not configured. Please configure it first."
             )
 
         try:
-            mnemonic = decrypt_sensitive_data(user.encrypted_dydx_private_key)
+            mnemonic = decrypt_sensitive_data(mnemonic_encrypted)
             dydx_client = await DydxClient.create_client(mnemonic=mnemonic)
             
             account_info = await DydxClient.get_account_info(dydx_client)
@@ -376,4 +396,83 @@ async def get_open_positions(current_user: str = Depends(get_current_user)) -> O
             success=False,
             positions=[],
             error=f"Failed to get open positions: {str(e)}"
+        )
+
+@router.post("/testnet-funds", response_model=TestnetFundsResponse)
+async def request_testnet_funds(current_user: str = Depends(get_current_user)) -> TestnetFundsResponse:
+    """Request testnet funds from dYdX faucet for the user's testnet wallet."""
+    try:
+        if not FAUCET_AVAILABLE:
+            return TestnetFundsResponse(
+                success=False,
+                message="Faucet client not available",
+                address="",
+                error="FaucetClient is not available in this environment"
+            )
+
+        db_manager = get_database_manager()
+        user = await db_manager.get_user_by_wallet(current_user)
+        
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        # Get testnet address from user credentials
+        testnet_address = user.dydx_testnet_address
+        if not testnet_address:
+            return TestnetFundsResponse(
+                success=False,
+                message="No testnet address configured",
+                address="",
+                error="Please configure your dYdX testnet address first"
+            )
+
+        logger.info(f"Requesting testnet funds for address: {testnet_address}")
+        
+        # Request funds from faucet
+        try:
+            # Make direct HTTP request to faucet with correct parameter names
+            async with httpx.AsyncClient() as client:
+                faucet_url = "https://faucet.v4testnet.dydx.exchange/faucet/tokens"
+                payload = {
+                    "address": testnet_address,
+                    "subaccountNumber": 0,  # camelCase as required by API
+                    "amount": 1000000000  # 1 USDC in smallest units
+                }
+                
+                response = await client.post(faucet_url, json=payload)
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ Faucet request successful for {testnet_address}")
+                    return TestnetFundsResponse(
+                        success=True,
+                        message="✅ Testnet funds requested successfully! Check your wallet in a few moments for 1 USDC.",
+                        address=testnet_address,
+                        error=None
+                    )
+                else:
+                    error_msg = response.text
+                    logger.error(f"❌ Faucet returned {response.status_code}: {error_msg}")
+                    return TestnetFundsResponse(
+                        success=False,
+                        message="Faucet request failed",
+                        address=testnet_address,
+                        error=f"Faucet error ({response.status_code}): {error_msg}"
+                    )
+            
+        except Exception as e:
+            logger.error(f"❌ Faucet request failed for {testnet_address}: {type(e).__name__}: {e}")
+            return TestnetFundsResponse(
+                success=False,
+                message="Faucet request failed",
+                address=testnet_address,
+                error=f"Faucet error: {str(e)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to request testnet funds for user {current_user}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to request testnet funds: {str(e)}"
         )

@@ -209,7 +209,14 @@
                                 <p id="private-key-status" class="mt-1 text-sm text-green-400 hidden">✓ Mnemonic phrase configured and encrypted</p>
                             </div>
 
-                            <div class="flex justify-end">
+                            <div class="flex justify-end space-x-3">
+                                <button id="request-testnet-funds-btn" type="button"
+                                        class="inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    Request Testnet Funds
+                                </button>
                                 <button id="save-dydx-credentials-btn" type="button"
                                         class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-dydx-blue hover:bg-dydx-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dydx-blue">
                                     Save dYdX Credentials
@@ -527,6 +534,48 @@
             </div>
         </div>
     </footer>
+
+    <script>
+        // Request Testnet Funds Button Handler
+        document.getElementById('request-testnet-funds-btn').addEventListener('click', async function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            try {
+                // Disable button and show loading state
+                btn.disabled = true;
+                btn.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Requesting...';
+                
+                // Call the API endpoint
+                const response = await fetch('/api/user/testnet-funds', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    alert(` Success!\n\n${data.message}\n\nWallet: ${data.address}\n\nCheck your wallet in a few moments for the test funds!`);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                } else {
+                    // Show error message
+                    alert(` Error: ${data.error || data.message}`);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error requesting testnet funds:', error);
+                alert(` Error: ${error.message}`);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+    </script>
 
     <!-- Dashboard JavaScript -->
     <script src="/static/js/dashboard.js?v={{ now() | int }}"></script>

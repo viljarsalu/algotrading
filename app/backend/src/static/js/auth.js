@@ -14,34 +14,66 @@ class Web3AuthManager {
         this.web3Modal = null;
         this.provider = null;
 
-        // Initialize if MetaMask is available
-        if (typeof window.ethereum !== 'undefined') {
-            this.provider = window.ethereum;
-            this.setupEventListeners();
-        }
+        // Initialize MetaMask with retry logic for Chrome compatibility
+        this.initializeProvider();
 
         // Update connection status on page load
         this.updateConnectionStatus();
     }
 
     /**
+     * Initialize provider with retry logic for Chrome compatibility
+     */
+    async initializeProvider() {
+        // Try to get provider immediately
+        if (typeof window.ethereum !== 'undefined') {
+            this.provider = window.ethereum;
+            this.setupEventListeners();
+            return;
+        }
+
+        // If not available, wait for it with timeout (Chrome compatibility)
+        let retries = 0;
+        const maxRetries = 50; // 5 seconds with 100ms intervals
+        const retryInterval = setInterval(() => {
+            if (typeof window.ethereum !== 'undefined') {
+                clearInterval(retryInterval);
+                this.provider = window.ethereum;
+                this.setupEventListeners();
+                console.log('MetaMask provider initialized after retry');
+                return;
+            }
+            retries++;
+            if (retries >= maxRetries) {
+                clearInterval(retryInterval);
+                console.warn('MetaMask provider not available after timeout');
+            }
+        }, 100);
+    }
+
+    /**
      * Set up event listeners for wallet events
      */
     setupEventListeners() {
-        if (this.provider) {
-            this.provider.on('accountsChanged', (accounts) => {
-                if (accounts.length > 0) {
-                    this.currentAccount = accounts[0];
-                    this.updateUI();
-                } else {
-                    this.disconnect();
-                }
-            });
+        if (this.provider && typeof this.provider.on === 'function') {
+            try {
+                this.provider.on('accountsChanged', (accounts) => {
+                    if (accounts.length > 0) {
+                        this.currentAccount = accounts[0];
+                        this.updateUI();
+                    } else {
+                        this.disconnect();
+                    }
+                });
 
-            this.provider.on('chainChanged', (chainId) => {
-                this.chainId = parseInt(chainId, 16);
-                this.updateNetworkInfo();
-            });
+                this.provider.on('chainChanged', (chainId) => {
+                    this.chainId = parseInt(chainId, 16);
+                    this.updateNetworkInfo();
+                });
+            } catch (error) {
+                console.warn('Failed to setup event listeners:', error);
+                // Continue anyway - event listeners are optional
+            }
         }
     }
 
@@ -64,20 +96,25 @@ class Web3AuthManager {
         try {
             this.showLoading('Connecting to wallet...');
 
-            // Request account access
+            // Ensure provider is ready
+            if (!this.provider) {
+                throw new Error('Provider not initialized');
+            }
+
+            // Request accounts - simple, direct call like dydx.trade does
             const accounts = await this.provider.request({
                 method: 'eth_requestAccounts'
             });
 
-            if (accounts.length > 0) {
+            if (accounts && accounts.length > 0) {
                 this.currentAccount = accounts[0];
                 this.isConnected = true;
 
                 // Get chain ID
-                const chainId = await this.provider.request({
+                const chainIdHex = await this.provider.request({
                     method: 'eth_chainId'
                 });
-                this.chainId = parseInt(chainId, 16);
+                this.chainId = parseInt(chainIdHex, 16);
 
                 this.updateUI();
                 this.hideLoading();
@@ -93,7 +130,7 @@ class Web3AuthManager {
             } else if (error.code === -32002) {
                 this.showError('Connection request already pending. Check MetaMask.');
             } else {
-                this.showError('Failed to connect wallet. Please try again.');
+                this.showError(`Failed to connect wallet: ${error.message || 'Unknown error'}`);
             }
         }
 

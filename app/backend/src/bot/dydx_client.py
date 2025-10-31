@@ -15,6 +15,7 @@ from dydx_v4_client.network import make_mainnet, make_testnet
 from dydx_v4_client.wallet import Wallet
 from dydx_v4_client.key_pair import KeyPair
 from src.core.config import get_settings
+from src.bot.dydx_v4_orders import DydxV4OrderPlacer
  
 logger = logging.getLogger(__name__)
  
@@ -191,6 +192,7 @@ class DydxClient:
         symbol: str,
         side: str,
         size: str,
+        network_id: int = 11155111,
         price: Optional[str] = None
     ) -> Dict[str, Any]:
         """Place market order with user-specific client.
@@ -200,6 +202,7 @@ class DydxClient:
             symbol: Trading pair symbol (e.g., 'BTC-USD')
             side: Order side ('BUY' or 'SELL')
             size: Order size as string
+            network_id: Network ID (1 for mainnet, 11155111 for testnet)
             price: Optional price for limit orders (ignored for market orders)
 
         Returns:
@@ -216,55 +219,16 @@ class DydxClient:
             if not size or float(size) <= 0:
                 raise ValueError(f"Invalid size: {size}")
 
-            # Place market order on dYdX V4
-            try:
-                # Get market info to convert symbol to market_id
-                markets = await client.node_client.get_markets()
-                market = None
-                for m in markets:
-                    if m.ticker == symbol:
-                        market = m
-                        break
-                
-                if not market:
-                    raise ValueError(f"Market not found for symbol: {symbol}")
-                
-                market_id = market.id
-                
-                # Convert size to quantums (smallest unit)
-                # For most assets, 1 quantum = 10^-8 of the asset
-                size_quantums = int(float(size) * 10**8)
-                
-                # Place order using node client
-                # Market orders use subticks = 0
-                order_result = await client.node_client.place_order(
-                    market_id=market_id,
-                    side=1 if side.upper() == 'BUY' else -1,  # 1 for BUY, -1 for SELL
-                    quantums=size_quantums,
-                    subticks=0,  # 0 for market order
-                    time_in_force=0,  # 0 for IOC (Immediate or Cancel)
-                    reduce_only=False,
-                    post_only=False,
-                    client_metadata=0
-                )
-                
-                logger.info(f"Market order placed successfully for {symbol}: {order_result}")
-                
-                return {
-                    'success': True,
-                    'order_id': str(order_result.get('order_id', 'unknown')),
-                    'symbol': symbol,
-                    'side': side.upper(),
-                    'size': size,
-                    'price': '0',
-                    'type': 'MARKET',
-                    'status': 'PENDING',
-                    'tx_hash': order_result.get('tx_hash')
-                }
-                
-            except Exception as e:
-                logger.error(f"Failed to place market order on dYdX: {e}")
-                raise
+            # Place real market order using DydxV4OrderPlacer
+            result = await DydxV4OrderPlacer.place_market_order(
+                client=client,
+                symbol=symbol,
+                side=side,
+                size=float(size),
+                network_id=network_id
+            )
+            
+            return result
 
         except Exception as e:
             logger.error(f"Failed to place market order: {e}")
@@ -283,7 +247,8 @@ class DydxClient:
         side: str,
         size: str,
         price: str,
-        time_in_force: str = "GTT"
+        time_in_force: str = "GTT",
+        network_id: int = 11155111
     ) -> Dict[str, Any]:
         """Place limit order with user-specific client.
 
@@ -294,6 +259,7 @@ class DydxClient:
             size: Order size as string
             price: Limit price as string
             time_in_force: Time in force policy ('GTT', 'IOC', 'FOK')
+            network_id: Network ID (1 for mainnet, 11155111 for testnet)
 
         Returns:
             Order placement result with order details
@@ -315,67 +281,18 @@ class DydxClient:
             if time_in_force not in ['GTT', 'IOC', 'FOK']:
                 raise ValueError(f"Invalid time_in_force: {time_in_force}")
 
-            # Place limit order on dYdX V4
-            try:
-                # Get market info to convert symbol to market_id
-                markets = await client.node_client.get_markets()
-                market = None
-                for m in markets:
-                    if m.ticker == symbol:
-                        market = m
-                        break
-                
-                if not market:
-                    raise ValueError(f"Market not found for symbol: {symbol}")
-                
-                market_id = market.id
-                
-                # Convert size to quantums
-                size_quantums = int(float(size) * 10**8)
-                
-                # Convert price to subticks
-                # subticks = price * 10^8 / (10^-8) = price * 10^16
-                # But we need to account for the atomic unit of the quote asset
-                price_subticks = int(float(price) * 10**8)
-                
-                # Map time_in_force to dYdX values
-                tif_map = {
-                    'GTT': 0,  # Good-til-time
-                    'IOC': 1,  # Immediate or Cancel
-                    'FOK': 2,  # Fill or Kill
-                }
-                tif_value = tif_map.get(time_in_force, 0)
-                
-                # Place order using node client
-                order_result = await client.node_client.place_order(
-                    market_id=market_id,
-                    side=1 if side.upper() == 'BUY' else -1,  # 1 for BUY, -1 for SELL
-                    quantums=size_quantums,
-                    subticks=price_subticks,
-                    time_in_force=tif_value,
-                    reduce_only=False,
-                    post_only=False,
-                    client_metadata=0
-                )
-                
-                logger.info(f"Limit order placed successfully for {symbol}: {order_result}")
-                
-                return {
-                    'success': True,
-                    'order_id': str(order_result.get('order_id', 'unknown')),
-                    'symbol': symbol,
-                    'side': side.upper(),
-                    'size': size,
-                    'price': price,
-                    'type': 'LIMIT',
-                    'time_in_force': time_in_force,
-                    'status': 'PENDING',
-                    'tx_hash': order_result.get('tx_hash')
-                }
-                
-            except Exception as e:
-                logger.error(f"Failed to place limit order on dYdX: {e}")
-                raise
+            # Place real limit order using DydxV4OrderPlacer
+            result = await DydxV4OrderPlacer.place_limit_order(
+                client=client,
+                symbol=symbol,
+                side=side,
+                size=float(size),
+                price=float(price),
+                time_in_force=time_in_force,
+                network_id=network_id
+            )
+            
+            return result
 
         except Exception as e:
             logger.error(f"Failed to place limit order: {e}")
@@ -462,7 +379,7 @@ class DydxClient:
 
     @staticmethod
     async def get_account_info(client: "DydxClient") -> Dict[str, Any]:
-        """Get account balances and positions.
+        """Get account balances and positions from dYdX indexer.
 
         Args:
             client: Authenticated DydxClient instance
@@ -471,32 +388,56 @@ class DydxClient:
             Account information including balances and positions
         """
         try:
-            # Get account information
-            account_info = await client.node_client.get_account()
+            import httpx
+            
+            # Get wallet address from the client
+            wallet = client.node_client._wallet
+            address = wallet.address if wallet else None
+            
+            if not address:
+                return {
+                    'success': False,
+                    'error': 'Wallet address not available',
+                }
 
-            # Get positions
-            positions = await client.node_client.get_positions()
+            # Determine indexer URL based on network
+            # Try to get network from node client config
+            indexer_url = "https://indexer.v4testnet.dydx.exchange"  # Default to testnet
+            
+            # Query indexer for account information
+            async with httpx.AsyncClient() as http_client:
+                # Get account info from indexer
+                account_response = await http_client.get(
+                    f"{indexer_url}/v4/accounts/{address}"
+                )
+                account_data = account_response.json()
+                
+                # Get positions from indexer
+                positions_response = await http_client.get(
+                    f"{indexer_url}/v4/perpetualPositions?address={address}"
+                )
+                positions_data = positions_response.json()
 
-            # Get subaccount information
-            subaccount_info = await client.node_client.get_subaccount()
+            account = account_data.get('account', {})
+            subaccount = account.get('subaccounts', [{}])[0] if account.get('subaccounts') else {}
 
             return {
                 'success': True,
                 'account': {
-                    'address': account_info.get('address'),
-                    'equity': account_info.get('equity'),
-                    'free_collateral': account_info.get('freeCollateral'),
-                    'pending_deposits': account_info.get('pendingDeposits'),
-                    'pending_withdrawals': account_info.get('pendingWithdrawals'),
-                    'open_notional': account_info.get('openNotional'),
-                    'notional_total': account_info.get('notionalTotal'),
+                    'address': account.get('address'),
+                    'equity': account.get('equity'),
+                    'free_collateral': account.get('freeCollateral'),
+                    'pending_deposits': account.get('pendingDeposits'),
+                    'pending_withdrawals': account.get('pendingWithdrawals'),
+                    'open_notional': account.get('openNotional'),
+                    'notional_total': account.get('notionalTotal'),
                 },
-                'positions': positions.get('positions', []),
+                'positions': positions_data.get('positions', []),
                 'subaccount': {
-                    'address': subaccount_info.get('address'),
-                    'equity': subaccount_info.get('equity'),
-                    'free_collateral': subaccount_info.get('freeCollateral'),
-                    'margin_used': subaccount_info.get('marginUsed'),
+                    'address': subaccount.get('address'),
+                    'equity': subaccount.get('equity'),
+                    'free_collateral': subaccount.get('freeCollateral'),
+                    'margin_used': subaccount.get('marginUsed'),
                 },
             }
 
