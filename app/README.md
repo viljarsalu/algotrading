@@ -471,10 +471,10 @@ docker-compose exec backend poetry run pytest tests/test_trading_audit.py -v
 
 
 ```bash
-curl -X POST http://localhost:8000/api/webhooks/signal/b05270eb-a217-4dee-b64f-c544dbe04d84 \
+curl -X POST http://localhost:8000/api/webhooks/signal/a911ece1-2c78-41d8-a235-dca941539af9 \
 -H "Content-Type: application/json" \
 -d '{
-  "secret": "76a407c93672879288f513a6c02974007a790aaec8902637d48cda03e1929dc4",
+  "secret": "0cf6fd0c3c296ac70a9ce21028bf7136c1b00d5aeed225e529117971d8ad86e8",
   "symbol": "BTC-USD",
   "side": "buy",
   "size": 0.01,
